@@ -1,0 +1,5 @@
+# Google GenAI SDK (NEW SDK - recommended)
+# This is the official, actively maintained SDK
+google-genai>=1.0.0
+
+# DO NOT use google-generativeai (legacy SDK, deprecated August 2025)
