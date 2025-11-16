@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React build
+frontend/build/
+frontend/.env.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# API Keys - NEVER COMMIT!
+*API_KEY*
+*.key
+secrets.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+/tmp/uploads/*
