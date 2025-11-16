@@ -131,12 +131,10 @@ async def websocket_chat(websocket: WebSocket, store_name: str):
                     config=types.GenerateContentConfig(
                         tools=[
                             types.Tool(
-                                file_search=types.FileSearchTool(
-                                    file_search_store_names=[store.name]
-                                )
+                                file_search={'file_search_store_names': [store.name]}
                             )
                         ],
-                        system_instruction="""You are a helpful AI assistant. 
+                        system_instruction="""You are a helpful AI assistant.
 Answer questions based on the provided documents.
 If information is not in the documents, say so honestly.
 Format responses nicely with markdown where appropriate."""
@@ -358,9 +356,7 @@ async def chat_rest(message: ChatMessage):
             config=types.GenerateContentConfig(
                 tools=[
                     types.Tool(
-                        file_search=types.FileSearchTool(
-                            file_search_store_names=[store.name]
-                        )
+                        file_search={'file_search_store_names': [store.name]}
                     )
                 ]
             )
