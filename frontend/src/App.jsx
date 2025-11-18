@@ -14,7 +14,9 @@ function App() {
   const [files, setFiles] = useState([]);
   const [showUpload, setShowUpload] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
-  
+  const [connectionError, setConnectionError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
+
   const wsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -68,30 +70,44 @@ function App() {
     
     ws.onopen = () => {
       setIsConnected(true);
+      setConnectionError(null);
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
-      if (data.type === 'loading') {
-        setIsLoading(true);
-      } else {
-        setIsLoading(false);
-        setMessages(prev => [...prev, {
-          type: data.type,
-          content: data.message,
-          timestamp: new Date()
-        }]);
+
+      // Skip user messages (already added immediately on send)
+      if (data.type === 'user') {
+        return;
       }
+
+      // Skip loading messages (already handled in sendMessage)
+      if (data.type === 'loading') {
+        return;
+      }
+
+      // Add assistant, system, or error messages
+      setIsLoading(false);
+      setMessages(prev => [...prev, {
+        type: data.type,
+        content: data.message,
+        timestamp: new Date()
+      }]);
     };
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       setIsConnected(false);
+      setIsLoading(false);
+      setConnectionError('Connection error occurred. Please try reconnecting.');
     };
 
     ws.onclose = () => {
       setIsConnected(false);
+      setIsLoading(false);
+      if (!connectionError) {
+        setConnectionError('Connection closed. Click reconnect to continue.');
+      }
     };
 
     wsRef.current = ws;
@@ -110,11 +126,22 @@ function App() {
   const sendMessage = () => {
     if (!inputMessage.trim() || !isConnected) return;
 
+    // Add user message immediately for instant feedback
+    const userMessage = {
+      type: 'user',
+      content: inputMessage,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    // Send to server
     wsRef.current.send(JSON.stringify({
       message: inputMessage
     }));
 
+    // Clear input and show loading state
     setInputMessage('');
+    setIsLoading(true);
   };
 
   const handleKeyPress = (e) => {
@@ -127,13 +154,27 @@ function App() {
   const uploadFiles = async (fileList) => {
     if (!selectedStore || !fileList.length) return;
 
+    const fileArray = Array.from(fileList);
+    const totalSize = fileArray.reduce((sum, file) => sum + file.size, 0);
+    const maxSize = 50 * 1024 * 1024; // 50MB
+
+    // Validate file size
+    if (totalSize > maxSize) {
+      setMessages(prev => [...prev, {
+        type: 'error',
+        content: `Total file size (${(totalSize / 1024 / 1024).toFixed(2)}MB) exceeds 50MB limit.`,
+        timestamp: new Date()
+      }]);
+      return;
+    }
+
     const formData = new FormData();
-    Array.from(fileList).forEach(file => {
+    fileArray.forEach(file => {
       formData.append('files', file);
     });
 
     try {
-      setIsLoading(true);
+      setUploadProgress(`Uploading ${fileArray.length} file(s)...`);
       const response = await fetch(
         `${API_URL}/api/stores/${selectedStore.display_name}/upload-multiple`,
         {
@@ -143,18 +184,26 @@ function App() {
       );
 
       if (response.ok) {
-        loadFiles(selectedStore.display_name);
+        setUploadProgress('Processing and indexing files...');
+        await loadFiles(selectedStore.display_name);
         setShowUpload(false);
         setMessages(prev => [...prev, {
           type: 'system',
-          content: `Files uploaded and indexing...`,
+          content: `✅ Successfully uploaded ${fileArray.length} file(s). Files are now indexed and ready for search.`,
           timestamp: new Date()
         }]);
+        setUploadProgress(null);
+      } else {
+        throw new Error('Upload failed');
       }
     } catch (error) {
       console.error('Error uploading files:', error);
-    } finally {
-      setIsLoading(false);
+      setMessages(prev => [...prev, {
+        type: 'error',
+        content: `❌ Failed to upload files. Please try again.`,
+        timestamp: new Date()
+      }]);
+      setUploadProgress(null);
     }
   };
 
@@ -207,9 +256,18 @@ function App() {
                 <span className={`status ${isConnected ? 'connected' : 'disconnected'}`}>
                   {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
                 </span>
+                {!isConnected && connectionError && (
+                  <button
+                    className="btn-reconnect"
+                    onClick={() => connectToStore(selectedStore)}
+                    style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '12px' }}
+                  >
+                    🔄 Reconnect
+                  </button>
+                )}
               </div>
               <div className="header-right">
-                <button 
+                <button
                   className="btn-secondary"
                   onClick={() => setShowUpload(!showUpload)}
                 >
@@ -217,6 +275,18 @@ function App() {
                 </button>
               </div>
             </div>
+
+            {connectionError && (
+              <div className="error-banner" style={{
+                background: '#ffebee',
+                color: '#c62828',
+                padding: '12px 20px',
+                borderLeft: '4px solid #c62828',
+                marginBottom: '10px'
+              }}>
+                ⚠️ {connectionError}
+              </div>
+            )}
 
             {showUpload && (
               <div className="upload-section">
@@ -228,14 +298,26 @@ function App() {
                   onChange={(e) => uploadFiles(e.target.files)}
                   style={{ display: 'none' }}
                 />
-                <button 
+                <button
                   className="btn-upload"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={!!uploadProgress}
                 >
-                  Select Files
+                  {uploadProgress ? uploadProgress : 'Select Files'}
                 </button>
+                {uploadProgress && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '10px',
+                    background: '#e3f2fd',
+                    borderRadius: '5px',
+                    color: '#1976d2'
+                  }}>
+                    ⏳ {uploadProgress}
+                  </div>
+                )}
                 <div className="files-info">
-                  <p>Supported formats: PDF, DOCX, TXT, MD, JSON, code</p>
+                  <p>Supported formats: PDF, DOCX, TXT, MD, JSON, code (max 50MB total)</p>
                   <div className="current-files">
                     <strong>Current files ({files.length}):</strong>
                     <ul>
@@ -252,17 +334,39 @@ function App() {
             <div className="messages-container">
               {messages.length === 0 && (
                 <div className="welcome-message">
-                  <h3>👋 Hi! I'm ready to answer questions about your documents.</h3>
-                  <p>Upload files and start asking questions!</p>
-                  <div className="example-queries">
-                    <p>Example questions:</p>
-                    <ul>
-                      <li>What does it say about security?</li>
-                      <li>Where is the database configuration?</li>
-                      <li>What API endpoints are available?</li>
-                      <li>How to deploy the application?</li>
-                    </ul>
-                  </div>
+                  <h3>👋 Welcome to Gemini File Search!</h3>
+                  <p>I'm your AI assistant, ready to help you explore and understand your documents.</p>
+
+                  {files.length === 0 ? (
+                    <div style={{ marginTop: '20px' }}>
+                      <p><strong>🚀 Get Started:</strong></p>
+                      <button
+                        onClick={() => setShowUpload(true)}
+                        style={{
+                          padding: '12px 24px',
+                          background: '#3498db',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          marginTop: '10px'
+                        }}
+                      >
+                        📎 Upload Your First Document
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="example-queries">
+                      <p><strong>💡 Try asking:</strong></p>
+                      <ul>
+                        <li>"What are the main topics in these documents?"</li>
+                        <li>"Summarize the key points about [topic]"</li>
+                        <li>"Find information about [specific subject]"</li>
+                        <li>"What does it say about [keyword]?"</li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -288,6 +392,9 @@ function App() {
                 <div className="message assistant loading">
                   <div className="message-content">
                     <strong>🤖 AI:</strong>
+                    <span style={{ marginLeft: '8px', color: '#7f8c8d', fontSize: '14px' }}>
+                      is typing...
+                    </span>
                     <div className="typing-indicator">
                       <span></span>
                       <span></span>
@@ -305,16 +412,16 @@ function App() {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask a question about your documents..."
-                disabled={!isConnected}
+                placeholder={isLoading ? "AI is responding..." : "Ask a question about your documents..."}
+                disabled={!isConnected || isLoading}
                 rows={2}
               />
-              <button 
+              <button
                 onClick={sendMessage}
-                disabled={!isConnected || !inputMessage.trim()}
+                disabled={!isConnected || !inputMessage.trim() || isLoading}
                 className="btn-send"
               >
-                Send ✈️
+                {isLoading ? '⏳' : 'Send ✈️'}
               </button>
             </div>
           </>

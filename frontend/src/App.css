@@ -176,8 +176,14 @@ body {
   transition: background 0.2s;
 }
 
-.btn-upload:hover {
+.btn-upload:hover:not(:disabled) {
   background: #2980b9;
+}
+
+.btn-upload:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .files-info {
@@ -272,6 +278,15 @@ body {
   background: #f8f9fa;
   color: #7f8c8d;
   border-left: 3px solid #3498db;
+  max-width: 70%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.message.error .message-content {
+  background: #ffebee;
+  color: #c62828;
+  border-left: 3px solid #c62828;
   max-width: 70%;
   margin: 0 auto;
   text-align: center;
@@ -402,6 +417,29 @@ body {
 .btn-secondary:hover {
   background: #3498db;
   color: white;
+}
+
+.btn-reconnect {
+  padding: 8px 16px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  animation: pulse 2s infinite;
+}
+
+.btn-reconnect:hover {
+  background: #c0392b;
+  animation: none;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 .no-store-selected {
